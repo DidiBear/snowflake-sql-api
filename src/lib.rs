@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use reqwest::Client;
-use serde::Deserialize;
-use serde_json::json;
+use serde::{de::DeserializeOwned, Deserialize};
+use serde_json::{json, Value};
 use url::Url;
 use uuid::Uuid;
 
@@ -26,12 +26,14 @@ pub struct SnowflakeClient {
 #[serde(rename_all = "camelCase")]
 struct Session {
     token: String,
-    session_id: u64,
+    // session_id: u64,
 }
 
 /// Based on https://github.com/joshuataylor/snowflake_elixir/blob/master/lib/snowflake_elixir/http/snowflake_client.ex
 impl SnowflakeClient {
-    pub async fn login<'params>(params: ConnectionParams<'params>) -> reqwest::Result<SnowflakeClient> {
+    pub async fn login<'params>(
+        params: ConnectionParams<'params>,
+    ) -> reqwest::Result<SnowflakeClient> {
         let host = format!("https://{}.snowflakecomputing.com", params.account_name);
 
         let url = Url::parse_with_params(
@@ -82,18 +84,23 @@ impl SnowflakeClient {
         #[derive(Deserialize)]
         struct LoginResponse {
             data: Session,
+            success: bool,
         }
 
         let result: LoginResponse = response.json().await?;
 
-        Ok(SnowflakeClient {
-            host,
-            session: result.data,
-        })
+        if result.success {
+            Ok(SnowflakeClient {
+                host,
+                session: result.data,
+            })
+        } else {
+            todo!()
+        }
     }
 
-    pub async fn query(&self, query: &str) -> reqwest::Result<()> {
-        let res = Client::new()
+    pub async fn query<TRow: DeserializeOwned>(&self, query: &str) -> reqwest::Result<Vec<TRow>> {
+        let response = Client::new()
             .post(format!(
                 "{}/queries/v1/query-request?requestId={}",
                 self.host,
@@ -119,17 +126,31 @@ impl SnowflakeClient {
             .send()
             .await?;
 
-        dbg!(res.status());
-        println!("{}", res.text().await?);
+        #[derive(Deserialize)]
+        struct QueryResponse {
+            data: QueryData,
+            success: bool,
+        }
 
-        // TODO: Manage results
-        Ok(())
+        #[derive(Deserialize)]
+        struct QueryData {
+            rowset: Value,
+            // rowtype: Vec<Value>,
+            // total: u32,
+        }
+
+        let result: QueryResponse = response.json().await?;
+        if !result.success {
+            todo!();
+        }
+        let rows = Vec::<TRow>::deserialize(result.data.rowset).expect("Rows deserialize");
+        Ok(rows)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // use super::*;
 
     #[test]
     fn it_works() {}
