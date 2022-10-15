@@ -7,14 +7,14 @@ use url::Url;
 use uuid::Uuid;
 
 #[derive(Default)]
-pub struct ConnectionParams {
-    pub account_name: String,
-    pub username: String,
-    pub password: String,
-    pub warehouse: String,
-    pub role: String,
-    pub database: String,
-    pub schema: String,
+pub struct ConnectionParams<'params> {
+    pub account_name: &'params str,
+    pub username: &'params str,
+    pub password: &'params str,
+    pub warehouse: &'params str,
+    pub role: &'params str,
+    pub database: &'params str,
+    pub schema: &'params str,
 }
 
 pub struct SnowflakeClient {
@@ -31,16 +31,16 @@ struct Session {
 
 /// Based on https://github.com/joshuataylor/snowflake_elixir/blob/master/lib/snowflake_elixir/http/snowflake_client.ex
 impl SnowflakeClient {
-    pub async fn login(params: ConnectionParams) -> reqwest::Result<SnowflakeClient> {
+    pub async fn login<'params>(params: ConnectionParams<'params>) -> reqwest::Result<SnowflakeClient> {
         let host = format!("https://{}.snowflakecomputing.com", params.account_name);
 
         let url = Url::parse_with_params(
             &format!("{host}/session/v1/login-request"),
             [
-                ("warehouse", &params.warehouse),
-                ("roleName", &params.role),
-                ("databaseName", &params.database),
-                ("schemaName", &params.schema),
+                ("warehouse", params.warehouse),
+                ("roleName", params.role),
+                ("databaseName", params.database),
+                ("schemaName", params.schema),
             ],
         )
         .expect("URL is wrong");
